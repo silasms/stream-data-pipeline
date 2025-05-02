@@ -55,5 +55,31 @@ func CalculateWindowStats(metric string, values []float64, start, end domain.Eve
 		Mean:        mean,
 		Variance:    variance,
 		StdDev:      stdDev,
+		P50:         PercentileSorted(sorted, 50.0),
+		P90:         PercentileSorted(sorted, 90.0),
+		P99:         PercentileSorted(sorted, 99.0),
 	}
+}
+
+func PercentileSorted(sorted []float64, p float64) float64 {
+	n := len(sorted)
+	if n == 0 {
+		return 0
+	}
+	if n == 1 {
+		return sorted[0]
+	}
+	if p <= 0 {
+		return sorted[0]
+	}
+	if p >= 100 {
+		return sorted[n-1]
+	}
+
+	rank := (p / 100.0) * float64(n-1)
+	low := int(math.Floor(rank))
+	high := int(math.Ceil(rank))
+	weight := rank - float64(low)
+
+	return sorted[low]*(1.0-weight) + sorted[high]*weight
 }
