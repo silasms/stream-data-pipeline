@@ -83,3 +83,30 @@ func PercentileSorted(sorted []float64, p float64) float64 {
 
 	return sorted[low]*(1.0-weight) + sorted[high]*weight
 }
+
+type ExponentialMovingAverage struct {
+	alpha float64
+	value float64
+	init  bool
+}
+
+func NewEMA(alpha float64) *ExponentialMovingAverage {
+	if alpha <= 0 || alpha > 1 {
+		alpha = 0.2
+	}
+	return &ExponentialMovingAverage{alpha: alpha}
+}
+
+func (e *ExponentialMovingAverage) Add(val float64) float64 {
+	if !e.init {
+		e.value = val
+		e.init = true
+		return val
+	}
+	e.value = e.alpha*val + (1.0-e.alpha)*e.value
+	return e.value
+}
+
+func (e *ExponentialMovingAverage) Value() float64 {
+	return e.value
+}
