@@ -3,6 +3,7 @@ package pipeline
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 
 	"github.com/silasms/stream-data-pipeline/internal/domain"
 )
@@ -49,4 +50,53 @@ func (p *Pipeline) AddTransform(fn HandlerFn) *Pipeline {
 func (p *Pipeline) AddFilter(fn FilterFn) *Pipeline {
 	p.filters = append(p.filters, fn)
 	return p
+}
+
+func (p *Pipeline) Start() {
+	for i := 0; i < p.workers; i++ {
+		p.wg.Add(1)
+		go p.worker()
+	}
+}
+
+func (p *Pipeline) worker() {
+	defer p.wg.Done()
+	for {
+		select {
+		case <-p.ctx.Done():
+			return
+		case event, ok := <-p.inChan:
+			if !ok {
+				return
+			}
+			p.processEvent(event)
+		}
+	}
+}
+
+func (p *Pipeline) processEvent(e *domain.Event) {
+	if err := e.Validate(); err != nil {
+		atomic.AddInt64(&p.droppedCount, 1)
+		return
+	}
+
+	for _, filter := range p.filters {
+		if !filter(e) {
+			atomic.AddInt64(&p.droppedCount, 1)
+			return
+		}
+	}
+
+	current := e
+	for _, transform := range p.transforms {
+		res, err := transform(current)
+		if err != nil || res == nil {
+			atomic.AddInt64(&p.droppedCount, 1)
+			return
+		}
+		current = res
+	}
+
+	atomic.AddInt64(&p.processedCount, 1)
+	p.outChan <- current
 }
