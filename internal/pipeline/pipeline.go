@@ -98,5 +98,34 @@ func (p *Pipeline) processEvent(e *domain.Event) {
 	}
 
 	atomic.AddInt64(&p.processedCount, 1)
-	p.outChan <- current
+	select {
+	case p.outChan <- current:
+	default:
+		atomic.AddInt64(&p.droppedCount, 1)
+	}
+}
+
+func (p *Pipeline) Ingest(e *domain.Event) bool {
+	select {
+	case p.inChan <- e:
+		return true
+	default:
+		atomic.AddInt64(&p.droppedCount, 1)
+		return false
+	}
+}
+
+func (p *Pipeline) Output() <-chan *domain.Event {
+	return p.outChan
+}
+
+func (p *Pipeline) Stats() (int64, int64) {
+	return atomic.LoadInt64(&p.processedCount), atomic.LoadInt64(&p.droppedCount)
+}
+
+func (p *Pipeline) Stop() {
+	p.cancel()
+	close(p.inChan)
+	p.wg.Wait()
+	close(p.outChan)
 }
