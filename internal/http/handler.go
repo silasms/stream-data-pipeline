@@ -32,6 +32,7 @@ func (s *Server) Router() http.Handler {
 	mux.HandleFunc("GET /api/v1/metrics/query", s.QueryHandler)
 	mux.HandleFunc("GET /api/v1/metrics/aggregate", s.AggregateHandler)
 	mux.HandleFunc("GET /health", s.HealthHandler)
+	mux.HandleFunc("GET /metrics", s.PrometheusHandler)
 
 	return mux
 }
@@ -120,4 +121,16 @@ func (s *Server) AggregateHandler(w http.ResponseWriter, r *http.Request) {
 func (s *Server) HealthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{"status": "UP"})
+}
+
+func (s *Server) PrometheusHandler(w http.ResponseWriter, r *http.Request) {
+	proc, drop := s.pipeline.Stats()
+	w.Header().Set("Content-Type", "text/plain; version=0.0.4")
+	fmt.Fprintf(w, "# HELP pipeline_events_processed_total Total events processed.\n")
+	fmt.Fprintf(w, "# TYPE pipeline_events_processed_total counter\n")
+	fmt.Fprintf(w, "pipeline_events_processed_total %d\n\n", proc)
+
+	fmt.Fprintf(w, "# HELP pipeline_events_dropped_total Total events dropped due to backpressure or validation.\n")
+	fmt.Fprintf(w, "# TYPE pipeline_events_dropped_total counter\n")
+	fmt.Fprintf(w, "pipeline_events_dropped_total %d\n", drop)
 }
